@@ -1,0 +1,6 @@
+[submodule "glob"]
+	path = lib/glob
+	url = https://github.com/mattnite/glob
+[submodule "zig-args"]
+	path = lib/zig-args
+	url = https://github.com/MasterQ32/zig-args
