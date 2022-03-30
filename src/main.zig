@@ -133,7 +133,7 @@ fn Progress(comptime Writer: type) type {
         writer: Writer,
 
         frame_ns: u64,
-        weight_factor: f64,
+        weight_base: f64,
 
         timer: std.time.Timer,
         last_value: u64 = 0,
@@ -141,12 +141,14 @@ fn Progress(comptime Writer: type) type {
         ns_rate: f64 = 0,
 
         pub fn init(total: usize, writer: Writer, options: Options) !Self {
+            const alpha = 2.0 / (1.0 + @intToFloat(f64, options.window * std.time.ns_per_s));
+
             var progress = Self{
                 .total = total,
                 .writer = writer,
 
                 .frame_ns = std.time.ns_per_s / options.fps,
-                .weight_factor = -1.0 / @intToFloat(f64, options.window * std.time.ns_per_s),
+                .weight_base = 1 - alpha,
 
                 .timer = try std.time.Timer.start(),
             };
@@ -162,7 +164,11 @@ fn Progress(comptime Writer: type) type {
             const curr_frame_num = now / self.frame_ns;
 
             if (curr_frame_num > last_frame_num or value >= self.total) {
-                self.updateRate(value, now);
+                if (value >= self.total) {
+                    self.ns_rate = @intToFloat(f64, self.total) / @intToFloat(f64, now);
+                } else {
+                    self.estimateRate(value, now);
+                }
 
                 try self.print(value, now);
 
@@ -171,11 +177,11 @@ fn Progress(comptime Writer: type) type {
             }
         }
 
-        fn updateRate(self: *Self, value: usize, now: u64) void {
+        fn estimateRate(self: *Self, value: usize, now: u64) void {
             const value_diff = @intToFloat(f64, value - self.last_value);
             const ns_diff = @intToFloat(f64, now - self.last_ns);
             const ns_rate = value_diff / ns_diff;
-            const weight = 1.0 - std.math.exp(ns_diff * self.weight_factor);
+            const weight = 1.0 - std.math.pow(f64, self.weight_base, ns_diff);
 
             if (self.ns_rate == 0) {
                 self.ns_rate = ns_rate;
